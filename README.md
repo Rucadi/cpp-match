@@ -56,7 +56,7 @@ This macro is dependent on
 
 This extension, supported at least in **GCC** and **Clang** compilers, and is used in Linux Kernel  [linux kernel coding style guide](https://www.kernel.org/doc/html/v4.10/process/coding-style.html#macros-enums-and-rtl).
 
-MSVC is not supported by this macro, if you want to use it in windows, use MinGW or  [Clang on visual studio](https://learn.microsoft.com/en-us/cpp/build/clang-support-msbuild?view=msvc-170)
+MSVC is not supported by this macro, if you want to use it in windows, use MinGW or  [Clang in visual studio](https://learn.microsoft.com/en-us/cpp/build/clang-support-msbuild?view=msvc-170)
 ## Functions
 
 ### `match(v, lambdas...)`
