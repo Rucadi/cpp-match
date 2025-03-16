@@ -91,14 +91,11 @@ Combines multiple `Result`s. If all `Result`s are successes, it applies the func
 - **Return:** A `Result` with either the result of `f` or the first error.
 - **Example:**
   ```cpp
-  int value1 = expect(get_new_int());
-  double value2 = expect(get_new_double());
+  auto value1 = maybe_get_int(); // returns Result<value1, E>
+  auto value2 = maybe_get_double(); // returns Result<value1, E2>
 
-  auto combined = cppmatch::zip_match(
-      [](int i, double d) { return i + d; },
-      r1, r2
-  );
-  // combined is a Result<double, Error<A,B>> where A, B are the possible errors of value1 and value2
+  auto combined = cppmatch::zip_match([](int i, double d) { return i + d; }, r1, r2);
+  // combined is a Result<double, Error<E,E2>>
   // if value1 and value2 where valid, the function is executed and combined has a correct value
   // if it was invalid, combined is a Result with the first error value encountered 
   ```
