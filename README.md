@@ -45,7 +45,7 @@ A macro that evaluates `expr`, which must be a `Result<T, E>`. If the result hol
       // this line is only executed if parse_to_double succeded, if it failed
       // the function would early-return, as it happens with operator ? in rust.
 
-      //we can use the result r as if no error culd be returned.
+      //we can use the result r as if no error could be returned.
       for(int i = 2; i < 10; ++i)
         r *= i;
 
