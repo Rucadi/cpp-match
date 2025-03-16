@@ -2,8 +2,7 @@
 
 A lightweight header-only Clang/GCC compatible C++ library for expressive pattern matching and error handling.
 
-Check an example in examples folder or go to godbolt to play with it! 
-[DEMO](https://compiler-explorer.com/z/9osq8WG7a)
+Check an example in examples folder or [go to compiler-explorer to play with it!](https://compiler-explorer.com/z/9osq8WG7a)
 
 ## Overview
 
