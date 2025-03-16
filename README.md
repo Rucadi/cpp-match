@@ -2,6 +2,9 @@
 
 A lightweight header-only Clang/GCC compatible C++ library for expressive pattern matching and error handling.
 
+Check an example in examples folder or go to godbolt to play with it! 
+[DEMO](https://compiler-explorer.com/z/9osq8WG7a)
+
 ## Overview
 
 A header-only C++ library that offers exceptionless error handling and type-safe enums, bringing Rust-inspired error propagation with the ? operator and the match operator to C++.
