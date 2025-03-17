@@ -169,7 +169,7 @@ namespace cppmatch {
     // Returns the success value of a Result or a provided default if an error occurred.
     template <typename T, typename E>
     constexpr T default_expect(const Result<T, E>& result, T&& default_value) {
-        return (result.index() == 0) ? std::get<0>(result) : default_value;
+        return std::holds_alternative<T>(result) ? std::get<T>(result) : default_value;
     }
 
 
@@ -182,6 +182,15 @@ namespace cppmatch {
         );
     }
 
+    template<typename T, typename E>
+    constexpr bool is_ok(const Result<T, E>& result) noexcept {
+        return std::holds_alternative<T>(result);
+    }
+
+    template<typename T, typename E>
+    constexpr bool is_err(const Result<T, E>& result) noexcept {
+        return std::holds_alternative<E>(result);
+    }
 
     namespace cppmatch_ranges{
         struct successes_fn {
@@ -204,6 +213,5 @@ namespace cppmatch {
     } // namespace cppmatch_ranges
 
     inline constexpr cppmatch_ranges::successes_fn successes{};
-
 
 } // namespace cppmatch

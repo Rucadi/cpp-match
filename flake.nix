@@ -74,22 +74,6 @@
           };
         } examplesDerivations;
 
-        # Create an app for each example derivation.
-        apps = builtins.listToAttrs (
-          map (
-            file:
-            let
-              name = builtins.substring 0 (builtins.stringLength file - 4) file;
-            in
-            {
-              name = name;
-              value = {
-                type = "app";
-                program = "${self.packages.${system}.${name}}/bin/${name}";
-              };
-            }
-          ) exampleFiles
-        );
       }
     );
 }

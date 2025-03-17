@@ -83,6 +83,26 @@ void run_tests() {
         CHECK(res.index() == 1);
     }, passed, failed);
 
+    run_test("is_ok() with success variant", [](){
+        Result<int, std::string> r = 5;
+        CHECK(is_ok(r));
+    }, passed, failed);
+
+    run_test("is_ok() with error variant", [](){
+        Result<int, std::string> r = std::string("oops");
+        CHECK(!is_ok(r));
+    }, passed, failed);
+
+    run_test("is_err() with success variant", [](){
+        Result<int, std::string> r = 5;
+        CHECK(!is_err(r));
+    }, passed, failed);
+    
+    run_test("is_err() with error variant", [](){
+        Result<int, std::string> r = std::string("oops");
+        CHECK(is_err(r));
+    }, passed, failed);
+
     run_test("match() with success variant", [](){
         Result<int, std::string> r = 5;
         auto result = match(r,
