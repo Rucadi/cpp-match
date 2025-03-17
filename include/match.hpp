@@ -29,15 +29,24 @@ SOFTWARE.
 #include <type_traits>
 #include <ranges>
 
-#define expect(expr) __extension__ ({                                        \
-    auto&& _result = (expr);                                                  \
-    using VariantType = std::remove_reference_t<decltype(_result)>;           \
-    static_assert(std::variant_size_v<VariantType> == 2, "expect requires a Result<T, E> (std::variant<T, E>)");    \
-    if (std::holds_alternative<std::variant_alternative_t<1, VariantType>>(_result)) { \
-        return std::get<1>(std::forward<decltype(_result)>(_result));         \
-    }                                                                         \
-    std::get<0>(std::forward<decltype(_result)>(_result));                    \
-})
+#define expect(expr)                                                           \
+  __extension__({                                                              \
+    auto&& _result{(expr)};                                                   \
+    using VariantType = std::remove_reference_t<decltype(_result)>;            \
+    static_assert(std::variant_size_v<VariantType> == 2,                       \
+                  "expect requires a Result<T, E> (std::variant<T, E>)");      \
+    if consteval {                                                             \
+      if (std::holds_alternative<std::variant_alternative_t<1, VariantType>>(  \
+              std::forward<decltype(_result)>(_result))) {                     \
+        return std::get<1>(std::forward<decltype(_result)>(_result));          \
+      }                                                                        \
+    } else {                                                                   \
+      if (_result.index()) {                                                   \
+        return std::get<1>(std::forward<decltype(_result)>(_result));          \
+      }                                                                        \
+    }                                                                          \
+    std::get<0>(std::forward<decltype(_result)>(_result));                     \
+  })
 
 
 namespace cppmatch {

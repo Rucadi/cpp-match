@@ -17,6 +17,7 @@
       let
         match_version = "0.0.1";
         pkgs = import nixpkgs { inherit system; };
+        google-benchmark = pkgs.callPackage ./google-benchmark.nix { };
 
         # Read all files in the examples folder and filter for .cpp files.
         exampleFiles = builtins.filter (f: builtins.match ".*\\.cpp$" f != null) (
@@ -70,6 +71,21 @@
             installPhase = ''
               mkdir -p $out/bin
               cp cppmatch_tests $out/bin/
+            '';
+          };
+
+          benchmark = pkgs.llvmPackages_20.stdenv.mkDerivation {
+            pname = "cppmatch_benchmark";
+            version = match_version;
+            src = ./.;
+            buildInputs = [  google-benchmark];
+            configurePhase = "";
+            buildPhase = ''
+              clang++ -std=c++23 -O3 benchmark/main.cpp -Iinclude -I${google-benchmark}/include -L${google-benchmark}/lib -lbenchmark -pthread -o cppmatch_benchmark
+            '';
+            installPhase = ''
+              mkdir -p $out/bin
+              cp cppmatch_benchmark $out/bin/
             '';
           };
         } examplesDerivations;
