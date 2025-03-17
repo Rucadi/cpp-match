@@ -12,6 +12,41 @@ The **expect** macro simplifies error propagation by automatically returning the
 
 It allows to defer the error-checking to the point where it is really important while ensuring that all the error options are handled.
 
+# Performance
+
+While I have not performed intensive testing, and performance can greately depend on the compiler version, I did perform some benchs based on: [exceptions vs errors](https://cedardb.com/blog/exceptions_vs_errors/) from CedarDB
+
+As you can see, cppmatch implementation is equivalent to using std::expected, exceptions seem to be faster in recursive workloads, but I've seen that if you use "empty" types, cppmatch/expected code generation is better.
+
+Run benchmarks in your pc by running:
+
+nix run github:rucadi/cpp-match#benchmark
+
+
+```
+Results gotten from WSL / i9 9900K
+
+Run on (16 X 3600.01 MHz CPU s)
+CPU Caches:
+  L1 Data 32 KiB (x8)
+  L1 Instruction 32 KiB (x8)
+  L2 Unified 256 KiB (x8)
+  L3 Unified 16384 KiB (x1)
+Load Average: 0.81, 0.63, 0.52
+---------------------------------------------------------------------
+Benchmark                           Time             CPU   Iterations
+---------------------------------------------------------------------
+recursive_fib_std_expected       3451 ns         3451 ns       203533
+recursive_fib_cppmatch           3410 ns         3410 ns       207236
+recursive_fib_throws             1714 ns         1714 ns       394960
+coord_expected                    981 ns          981 ns       690791
+coord_cppmatch                    978 ns          978 ns       722914
+coord_throws                     1213 ns         1213 ns       580559
+```
+
+to run the tests perform nix command:
+``nix run github.com:rucadi/cppmatch#benchmark`` 
+
 
 ## Types
 
