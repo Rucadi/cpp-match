@@ -18,11 +18,6 @@ While I have not performed intensive testing, and performance can greately depen
 
 As you can see, cppmatch implementation is equivalent to using std::expected, exceptions seem to be faster in recursive workloads, but I've seen that if you use "empty" types, cppmatch/expected code generation is better.
 
-Run benchmarks in your pc by running:
-
-nix run github:rucadi/cpp-match#benchmark
-
-
 ```
 Results gotten from WSL / i9 9900K
 
