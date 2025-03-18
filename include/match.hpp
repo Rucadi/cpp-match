@@ -107,6 +107,7 @@ namespace cppmatch {
                 static_assert(true, "No error found in pick_first_error_impl");
             }
         }
+
         template<typename SuccessTuple, typename... Args>
         constexpr auto pick_first_error(Args&&... args) {
             auto tup = std::forward_as_tuple(args...);
@@ -122,12 +123,12 @@ namespace cppmatch {
                     if constexpr (allSuccess) {
                         if constexpr (std::is_void_v<decltype(f(std::forward<Args>(args)...))>) {
                             f(std::forward<Args>(args)...);
-                            return Return{ std::monostate{} };
+                            return Return(std::in_place_index_t<0>{}, std::monostate{});
                         } else {
-                            return Return{ f(std::forward<Args>(args)...) };
+                            return Return(std::in_place_index_t<0>{}, f(std::forward<Args>(args)...));
                         }
                     } else {
-                        return Return{ std::in_place_index<1>, pick_first_error<SuccessTuple>(std::forward<Args>(args)...) };
+                        return Return(std::in_place_index_t<1>{}, pick_first_error<SuccessTuple>(std::forward<Args>(args)...));
                     }
                 },
                 rs...
@@ -161,17 +162,16 @@ namespace cppmatch {
         return std::holds_alternative<T>(result) ? std::get<T>(result) : default_value;
     }
 
-
+    // Exposed Function: map_error
+    // Transforms the error alternative using the provided function, constructing the Result explicitly.
     template <typename T, typename E1, typename F>
     constexpr auto map_error(const Result<T, E1>& result, F&& f) {
         using E2 = std::invoke_result_t<F, const E1&>;
-        return match(result, 
-            [](const T& val) static { return Result<T, E2>{ val }; },
-            [&](const E1& err) { return Result<T, E2>{ f(err) }; }
+        return match(result,
+            [](const T& val) static { return Result<T, E2>(std::in_place_index_t<0>{}, val); },
+            [&](const E1& err) { return Result<T, E2>(std::in_place_index_t<1>{}, f(err)); }
         );
     }
-
-
 
     template<typename T, typename E>
     constexpr bool is_err(const Result<T, E>& result) noexcept {
@@ -194,7 +194,7 @@ namespace cppmatch {
                 static_assert(std::variant_size_v<VariantType> == 2, "Variants must have exactly two alternatives");
     
                 return std::forward<R>(range)
-                    | std::views::filter([](const auto& res) static { return std::holds_alternative<std::variant_alternative_t<0, VariantType>>(res); })
+                    | std::views::filter([](const auto& res) static { return is_ok(res); })
                     | std::views::transform([](const auto& res) static { return std::get<0>(res); });
             }
     
