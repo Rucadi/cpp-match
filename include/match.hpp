@@ -210,7 +210,7 @@ namespace cppmatch {
 
 } // namespace cppmatch
 
-#define expect(expr) ({                                                       \
+#define expect(expr) __extension__ ({                                                       \
     auto&& expr_ = (expr);                                                     \
     if (cppmatch::is_err(expr_))                                                \
         return std::get<1>(std::move(expr_)); /* Handle error case */          \
