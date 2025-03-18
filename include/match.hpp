@@ -29,26 +29,6 @@ SOFTWARE.
 #include <type_traits>
 #include <ranges>
 
-#define expect(expr)                                                           \
-  __extension__({                                                              \
-    auto&& _result{(expr)};                                                   \
-    using VariantType = std::remove_reference_t<decltype(_result)>;            \
-    static_assert(std::variant_size_v<VariantType> == 2,                       \
-                  "expect requires a Result<T, E> (std::variant<T, E>)");      \
-    if consteval {                                                             \
-      if (std::holds_alternative<std::variant_alternative_t<1, VariantType>>(  \
-              std::forward<decltype(_result)>(_result))) {                     \
-        return std::get<1>(std::forward<decltype(_result)>(_result));          \
-      }                                                                        \
-    } else {                                                                   \
-      if (_result.index()) {                                                   \
-        return std::get<1>(std::forward<decltype(_result)>(_result));          \
-      }                                                                        \
-    }                                                                          \
-    std::get<0>(std::forward<decltype(_result)>(_result));                     \
-  })
-
-
 namespace cppmatch {
 
     // Exposed Type: Result
@@ -191,16 +171,21 @@ namespace cppmatch {
         );
     }
 
-    template<typename T, typename E>
-    constexpr bool is_ok(const Result<T, E>& result) noexcept {
-        return std::holds_alternative<T>(result);
-    }
+
 
     template<typename T, typename E>
     constexpr bool is_err(const Result<T, E>& result) noexcept {
-        return std::holds_alternative<E>(result);
+        if consteval {
+            return std::holds_alternative<E>(result);
+        }
+        return result.index(); // at runtime is faster to check the index
     }
 
+    template<typename T, typename E>
+    constexpr bool is_ok(const Result<T, E>& result) noexcept {
+        return !is_err(result);
+    }
+    
     namespace cppmatch_ranges{
         struct successes_fn {
             template <std::ranges::range R>
@@ -224,3 +209,10 @@ namespace cppmatch {
     inline constexpr cppmatch_ranges::successes_fn successes{};
 
 } // namespace cppmatch
+
+#define expect(expr) ({                                                       \
+    auto&& expr_ = (expr);                                                     \
+    if (cppmatch::is_err(expr_))                                                \
+        return std::get<1>(std::move(expr_)); /* Handle error case */          \
+    std::get<0>(std::move(expr_));                                             \
+})
