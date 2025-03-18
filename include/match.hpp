@@ -186,7 +186,7 @@ namespace cppmatch {
     constexpr auto map_error(const Result<T, E1>& result, F&& f) {
         using E2 = std::invoke_result_t<F, const E1&>;
         return match(result, 
-            [&](const T& val) { return Result<T, E2>{ val }; },
+            [](const T& val) static { return Result<T, E2>{ val }; },
             [&](const E1& err) { return Result<T, E2>{ f(err) }; }
         );
     }
@@ -209,8 +209,8 @@ namespace cppmatch {
                 static_assert(std::variant_size_v<VariantType> == 2, "Variants must have exactly two alternatives");
     
                 return std::forward<R>(range)
-                    | std::views::filter([](const auto& res) { return std::holds_alternative<std::variant_alternative_t<0, VariantType>>(res); })
-                    | std::views::transform([](const auto& res) { return std::get<0>(res); });
+                    | std::views::filter([](const auto& res) static { return std::holds_alternative<std::variant_alternative_t<0, VariantType>>(res); })
+                    | std::views::transform([](const auto& res) static { return std::get<0>(res); });
             }
     
             template <std::ranges::range R>
