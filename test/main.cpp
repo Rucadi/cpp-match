@@ -136,7 +136,7 @@ void run_tests() {
             [](const std::string& err) { return 5; }
         );
             
-        auto result2 = match_e(r, 
+        auto result2 = match(r, 
             [](double){return 1;},
             [](const auto& e) {
                  return match(e,

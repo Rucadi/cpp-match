@@ -28,14 +28,12 @@ SOFTWARE.
 #include <tuple>
 #include <type_traits>
 #include <ranges>
-
 namespace cppmatch {
 
     // Exposed Type: Result
     // A type alias for std::variant<T, E>, representing a success value T or an error E.
     template<typename T, typename E>
     using Result = std::variant<T, E>;
-
 
     template<typename T, typename... Ts>
     struct is_one_of : std::disjunction<std::is_same<T, Ts>...> {};
@@ -65,8 +63,10 @@ namespace cppmatch {
         }
     };
 
-
     namespace cppmatch_detail {
+
+        template<class... Ts> 
+        struct overloaded : Ts... { using Ts::operator()...; };
 
         // Trait to check if a type is a std::variant.
         template<typename T>
@@ -85,12 +85,11 @@ namespace cppmatch {
     
         template<typename T>
         constexpr bool is_error_v = is_error<std::decay_t<T>>::value;
-    
+
         // Recursively visit a nested variant until a non-variant (or non-error) value is found.
         template<typename T, typename Visitor>
         constexpr auto flat_visit(T&& value, Visitor&& vis) {
             if constexpr (is_error_v<std::decay_t<T>>) {
-                // If the value is an Error, unwrap its inner variant and continue visiting.
                 return flat_visit(std::forward<T>(value).value, std::forward<Visitor>(vis));
             } else if constexpr (is_variant_v<std::decay_t<T>>) {
                 return std::visit(
@@ -104,34 +103,7 @@ namespace cppmatch {
             }
         }
     
-        // Combine multiple lambdas into a single visitor for std::visit.
-        template<class... Ts>
-        struct overloaded : Ts... {
-            using Ts::operator()...;
-        };
-        template<class... Ts>
-        overloaded(Ts...) -> overloaded<Ts...>;
-    
-        // Extract success and error types from a Result variant.
-        template<typename R>
-        using success_type_t = std::variant_alternative_t<0, std::decay_t<R>>;
-        template<typename R>
-        using error_type_t = std::variant_alternative_t<1, std::decay_t<R>>;
-    
-        // Deduce a common error type: if all error types are the same, use that type;
-        // otherwise, use a variant.
-        template<typename... Es>
-        constexpr bool all_same_v = std::conjunction_v<std::is_same<Es, std::tuple_element_t<0, std::tuple<Es...>>>...>;
-        template<typename... Es>
-        using deduced_error_t = std::conditional_t<
-            all_same_v<Es...>,
-            std::tuple_element_t<0, std::tuple<Es...>>,
-            std::variant<Es...>
-        >;
-    
     } // namespace cppmatch_detail
-    
-    // Exposed Function: match
     // Applies pattern matching on a variant (or our Error type) using provided lambdas.
     template<typename Variant, typename... Lambdas>
     constexpr auto match(Variant&& v, Lambdas&&... lambdas) {
@@ -141,10 +113,6 @@ namespace cppmatch {
         );
     }
   
-    template<typename Variant, typename... Lambdas>
-    constexpr auto match_e(Variant&& v, Lambdas&&... lambdas) {
-        return std::visit(cppmatch_detail::overloaded{ std::forward<Lambdas>(lambdas)... }, std::forward<Variant>(v));
-    }
   
 
     // Exposed Function: default_expect
@@ -199,22 +167,37 @@ namespace cppmatch {
     } // namespace cppmatch_ranges
 
     inline constexpr cppmatch_ranges::successes_fn successes{};
-
 } // namespace cppmatch
 
-#define expect(expr) __extension__ ({                                                       \
+#define expect(expr) __extension__ ({                                         \
     auto&& expr_ = (expr);                                                     \
     if (cppmatch::is_err(expr_))                                                \
-        return std::get<1>(std::move(expr_)); /* Handle error case */          \
-    std::get<0>(std::move(expr_));                                             \
+        return std::get<1>(std::move(expr_)); /* Handle error case */            \
+    std::get<0>(std::move(expr_));                                                \
 })
 
 
 
-// Is this functionality necessary? Should this be included in the library?
+// This functionality is not yet decided to be included in the library, keep it "separated" for now to allow deletion if needed.
 namespace cppmatch {
     namespace cppmatch_detail {
   
+        template<typename... Es>
+        constexpr bool all_same_v = std::conjunction_v<std::is_same<Es, std::tuple_element_t<0, std::tuple<Es...>>>...>;
+        template<typename... Es>
+        using deduced_error_t = std::conditional_t<
+            all_same_v<Es...>,
+            std::tuple_element_t<0, std::tuple<Es...>>,
+            std::variant<Es...>
+        >;
+
+        template<typename R>
+        using success_type_t = std::variant_alternative_t<0, std::decay_t<R>>;
+        template<typename R>
+        using error_type_t = std::variant_alternative_t<1, std::decay_t<R>>;
+
+
+
       // Recursively pick the first error from a tuple of arguments.
       template < std::size_t I, typename SuccessTuple, typename Tuple >
         constexpr auto pick_first_error_impl(const Tuple & tup) {
