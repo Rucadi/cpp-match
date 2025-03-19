@@ -121,6 +121,34 @@ void run_tests() {
         CHECK(result == -1);
     }, passed, failed);
 
+    run_test("Error conversion: from Error<int, float> to Error<int, float, std::string>", [](){
+        // Create a small error type.
+        Error<int, float> e_small = 3.14f;
+        // Convert it to a larger error type.
+        Error<int, float, std::string> e_large = e_small;
+        // Wrap the error into a Result.
+        Result<double, Error<int, float, std::string>> r = e_large;
+        auto result = match(r,
+            [](long long int val) { return 1; },
+            [](int e) { return 2; },
+            [](float e) { return  3; },
+            [](double e) { return  4; },
+            [](const std::string& err) { return 5; }
+        );
+            
+        auto result2 = match(r, 
+            [](double){return 1;},
+            [](const auto& e) {
+                 return match(e,
+                    [](int){return 2;},
+                    [](float){return 3;},
+                    [](const std::string&){return 4;});
+            }
+        );
+        CHECK(result == 3);
+        CHECK(result2 == result);
+      }, passed, failed);
+
     run_test("zip_match() with two successes", [](){
         Result<int, std::string> a = 3;
         Result<int, std::string> b = 7;
