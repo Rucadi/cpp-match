@@ -36,10 +36,35 @@ namespace cppmatch {
     template<typename T, typename E>
     using Result = std::variant<T, E>;
 
+
+    template<typename T, typename... Ts>
+    struct is_one_of : std::disjunction<std::is_same<T, Ts>...> {};
+
     // Exposed Type: Error
     // A variadic type alias for std::variant, allowing multiple error types as requested.
     template<typename... Ts>
-    using Error = std::variant<Ts...>;
+    class Error {
+    public:
+        std::variant<Ts...> value;
+
+        template<typename T, typename = std::enable_if_t<is_one_of<std::decay_t<T>, Ts...>::value>>
+        Error(T&& t) : value(std::forward<T>(t)) {}
+
+        template<typename... Us, typename = std::enable_if_t<(is_one_of<Us, Ts...>::value && ...)>>
+        Error(const Error<Us...>& other) {
+            std::visit([this](auto&& arg) {
+                value = std::variant<Ts...>(std::forward<decltype(arg)>(arg));
+            }, other.value);
+        }
+
+        template<typename... Us, typename = std::enable_if_t<(is_one_of<Us, Ts...>::value && ...)>>
+        Error(Error<Us...>&& other) {
+            std::visit([this](auto&& arg) {
+                value = std::variant<Ts...>(std::forward<decltype(arg)>(arg));
+            }, std::move(other.value));
+        }
+    };
+
 
     namespace cppmatch_detail {
 
@@ -48,14 +73,26 @@ namespace cppmatch {
         struct is_variant : std::false_type {};
         template<typename... Ts>
         struct is_variant<std::variant<Ts...>> : std::true_type {};
-
+    
         template<typename T>
         constexpr bool is_variant_v = is_variant<std::decay_t<T>>::value;
-
-        // Recursively visit a nested variant until a non-variant value is found.
+    
+        // Trait to detect our custom Error type.
+        template<typename T>
+        struct is_error : std::false_type {};
+        template<typename... Ts>
+        struct is_error<Error<Ts...>> : std::true_type {};
+    
+        template<typename T>
+        constexpr bool is_error_v = is_error<std::decay_t<T>>::value;
+    
+        // Recursively visit a nested variant until a non-variant (or non-error) value is found.
         template<typename T, typename Visitor>
         constexpr auto flat_visit(T&& value, Visitor&& vis) {
-            if constexpr (is_variant_v<std::decay_t<T>>) {
+            if constexpr (is_error_v<std::decay_t<T>>) {
+                // If the value is an Error, unwrap its inner variant and continue visiting.
+                return flat_visit(std::forward<T>(value).value, std::forward<Visitor>(vis));
+            } else if constexpr (is_variant_v<std::decay_t<T>>) {
                 return std::visit(
                     [&](auto&& inner) {
                         return flat_visit(std::forward<decltype(inner)>(inner), std::forward<Visitor>(vis));
@@ -66,7 +103,7 @@ namespace cppmatch {
                 return std::forward<Visitor>(vis)(std::forward<T>(value));
             }
         }
-
+    
         // Combine multiple lambdas into a single visitor for std::visit.
         template<class... Ts>
         struct overloaded : Ts... {
@@ -74,14 +111,15 @@ namespace cppmatch {
         };
         template<class... Ts>
         overloaded(Ts...) -> overloaded<Ts...>;
-
+    
         // Extract success and error types from a Result variant.
         template<typename R>
         using success_type_t = std::variant_alternative_t<0, std::decay_t<R>>;
         template<typename R>
         using error_type_t = std::variant_alternative_t<1, std::decay_t<R>>;
-
-        // Deduce a common error type: if all error types are the same, use that type; otherwise, use a variant.
+    
+        // Deduce a common error type: if all error types are the same, use that type;
+        // otherwise, use a variant.
         template<typename... Es>
         constexpr bool all_same_v = std::conjunction_v<std::is_same<Es, std::tuple_element_t<0, std::tuple<Es...>>>...>;
         template<typename... Es>
@@ -90,70 +128,24 @@ namespace cppmatch {
             std::tuple_element_t<0, std::tuple<Es...>>,
             std::variant<Es...>
         >;
-
-        // Recursively pick the first error from a tuple of arguments.
-        template<std::size_t I, typename SuccessTuple, typename Tuple>
-        constexpr auto pick_first_error_impl(const Tuple& tup) {
-            if constexpr (I < std::tuple_size_v<Tuple>) {
-                using Expected = std::tuple_element_t<I, SuccessTuple>;
-                using Actual = std::decay_t<decltype(std::get<I>(tup))>;
-                if constexpr (!std::is_same_v<Actual, Expected>) {
-                    return std::get<I>(tup);
-                } else {
-                    return pick_first_error_impl<I + 1, SuccessTuple>(tup);
-                }
-            } else {
-                // This branch should be unreachable if an error is present.
-                static_assert(true, "No error found in pick_first_error_impl");
-            }
-        }
-
-        template<typename SuccessTuple, typename... Args>
-        constexpr auto pick_first_error(Args&&... args) {
-            auto tup = std::forward_as_tuple(args...);
-            return pick_first_error_impl<0, SuccessTuple>(tup);
-        }
-
-        // Internal implementation of zip_match.
-        template<typename SuccessTuple, typename Return, typename F, typename... Rs, std::size_t... I>
-        constexpr Return zip_match_impl(F&& f, std::index_sequence<I...>, const Rs&... rs) {
-            return std::visit(
-                [&]<typename... Args>(Args&&... args) -> Return {
-                    constexpr bool allSuccess = ((std::is_same_v<std::decay_t<Args>, std::tuple_element_t<I, SuccessTuple>>) && ...);
-                    if constexpr (allSuccess) {
-                        if constexpr (std::is_void_v<decltype(f(std::forward<Args>(args)...))>) {
-                            f(std::forward<Args>(args)...);
-                            return Return(std::in_place_index_t<0>{}, std::monostate{});
-                        } else {
-                            return Return(std::in_place_index_t<0>{}, f(std::forward<Args>(args)...));
-                        }
-                    } else {
-                        return Return(std::in_place_index_t<1>{}, pick_first_error<SuccessTuple>(std::forward<Args>(args)...));
-                    }
-                },
-                rs...
-            );
-        }
+    
     } // namespace cppmatch_detail
-
+    
     // Exposed Function: match
-    // Applies pattern matching on a variant using provided lambdas.
+    // Applies pattern matching on a variant (or our Error type) using provided lambdas.
     template<typename Variant, typename... Lambdas>
     constexpr auto match(Variant&& v, Lambdas&&... lambdas) {
-        return cppmatch_detail::flat_visit(std::forward<Variant>(v), cppmatch_detail::overloaded{ std::forward<Lambdas>(lambdas)... });
+        return cppmatch_detail::flat_visit(
+            std::forward<Variant>(v),
+            cppmatch_detail::overloaded{ std::forward<Lambdas>(lambdas)... }
+        );
     }
-
-    // Exposed Function: zip_match
-    // Combines multiple Results, applying f if all are successes, or returning the first encountered error.
-    template<typename F, typename... Rs>
-    constexpr auto zip_match(F&& f, const Rs&... rs) {
-        using SuccessTuple = std::tuple<cppmatch_detail::success_type_t<Rs>...>;
-        using ErrorCommon = cppmatch_detail::deduced_error_t<cppmatch_detail::error_type_t<Rs>...>;
-        using f_return_t = decltype(f(std::declval<cppmatch_detail::success_type_t<Rs>>()...));
-        using success_t = std::conditional_t<std::is_void_v<f_return_t>, std::monostate, f_return_t>;
-        using Return = Result<success_t, ErrorCommon>;
-        return cppmatch_detail::zip_match_impl<SuccessTuple, Return>(std::forward<F>(f), std::index_sequence_for<Rs...>{}, rs...);
+  
+    template<typename Variant, typename... Lambdas>
+    constexpr auto match_e(Variant&& v, Lambdas&&... lambdas) {
+        return std::visit(cppmatch_detail::overloaded{ std::forward<Lambdas>(lambdas)... }, std::forward<Variant>(v));
     }
+  
 
     // Exposed Function: default_expect
     // Returns the success value of a Result or a provided default if an error occurred.
@@ -216,3 +208,68 @@ namespace cppmatch {
         return std::get<1>(std::move(expr_)); /* Handle error case */          \
     std::get<0>(std::move(expr_));                                             \
 })
+
+
+
+// Is this functionality necessary? Should this be included in the library?
+namespace cppmatch {
+    namespace cppmatch_detail {
+  
+      // Recursively pick the first error from a tuple of arguments.
+      template < std::size_t I, typename SuccessTuple, typename Tuple >
+        constexpr auto pick_first_error_impl(const Tuple & tup) {
+          if constexpr(I < std::tuple_size_v < Tuple > ) {
+            using Expected = std::tuple_element_t < I, SuccessTuple > ;
+            using Actual = std::decay_t < decltype(std::get < I > (tup)) > ;
+            if constexpr(!std::is_same_v < Actual, Expected > ) {
+              return std::get < I > (tup);
+            } else {
+              return pick_first_error_impl < I + 1, SuccessTuple > (tup);
+            }
+          } else {
+            // This branch should be unreachable if an error is present.
+            static_assert(true, "No error found in pick_first_error_impl");
+          }
+        }
+  
+      template < typename SuccessTuple, typename...Args >
+        constexpr auto pick_first_error(Args && ...args) {
+          auto tup = std::forward_as_tuple(args...);
+          return pick_first_error_impl < 0, SuccessTuple > (tup);
+        }
+  
+      // Internal implementation of zip_match.
+      template < typename SuccessTuple, typename Return, typename F, typename...Rs, std::size_t...I >
+        constexpr Return zip_match_impl(F && f, std::index_sequence < I... > ,
+          const Rs & ...rs) {
+          return std::visit(
+            [ & ] < typename...Args > (Args && ...args) -> Return {
+              constexpr bool allSuccess = ((std::is_same_v < std::decay_t < Args > , std::tuple_element_t < I, SuccessTuple >> ) && ...);
+              if constexpr(allSuccess) {
+                if constexpr(std::is_void_v < decltype(f(std::forward < Args > (args)...)) > ) {
+                  f(std::forward < Args > (args)...);
+                  return Return(std::in_place_index_t < 0 > {}, std::monostate {});
+                } else {
+                  return Return(std::in_place_index_t < 0 > {}, f(std::forward < Args > (args)...));
+                }
+              } else {
+                return Return(std::in_place_index_t < 1 > {}, pick_first_error < SuccessTuple > (std::forward < Args > (args)...));
+              }
+            },
+            rs...
+          );
+        }
+  
+    }
+    template < typename F, typename...Rs >
+      constexpr auto zip_match(F && f,
+        const Rs & ...rs) {
+        using SuccessTuple = std::tuple < cppmatch_detail::success_type_t < Rs > ... > ;
+        using ErrorCommon = cppmatch_detail::deduced_error_t < cppmatch_detail::error_type_t < Rs > ... > ;
+        using f_return_t = decltype(f(std::declval < cppmatch_detail::success_type_t < Rs >> ()...));
+        using success_t = std::conditional_t < std::is_void_v < f_return_t > , std::monostate, f_return_t > ;
+        using Return = Result < success_t, ErrorCommon > ;
+        return cppmatch_detail::zip_match_impl < SuccessTuple, Return > (std::forward < F > (f), std::index_sequence_for < Rs... > {}, rs...);
+      }
+  
+  }
