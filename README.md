@@ -27,16 +27,18 @@ CPU Caches:
   L1 Instruction 32 KiB (x8)
   L2 Unified 256 KiB (x8)
   L3 Unified 16384 KiB (x1)
-Load Average: 0.81, 0.63, 0.52
----------------------------------------------------------------------
-Benchmark                           Time             CPU   Iterations
----------------------------------------------------------------------
-recursive_fib_std_expected       3451 ns         3451 ns       203533
-recursive_fib_cppmatch           3410 ns         3410 ns       207236
-recursive_fib_throws             1714 ns         1714 ns       394960
-coord_expected                    981 ns          981 ns       690791
-coord_cppmatch                    978 ns          978 ns       722914
-coord_throws                     1213 ns         1213 ns       580559
+Load Average: 0.43, 0.35, 0.39
+---------------------------------------------------------------------------------
+Benchmark                                       Time             CPU   Iterations
+---------------------------------------------------------------------------------
+recursive_fib_std_expected                   3462 ns         3462 ns       197520
+recursive_fib_cppmatch                       3487 ns         3446 ns       199569
+recursive_fib_cppmatch_with_exceptions       5455 ns         5455 ns       135089
+recursive_fib_throws                         1661 ns         1661 ns       441885
+coord_expected                                989 ns          989 ns       703142
+coord_cppmatch                                987 ns          987 ns       580757
+coord_cppmatch_with_exceptions               1132 ns         1132 ns       569379
+coord_throws                                 1220 ns         1220 ns       589315
 ```
 
 to run the tests perform nix command:
@@ -89,6 +91,8 @@ This macro is dependent on
 This extension, supported at least in **GCC** and **Clang** compilers, and is used in Linux Kernel  [linux kernel coding style guide](https://www.kernel.org/doc/html/v4.10/process/coding-style.html#macros-enums-and-rtl).
 
 MSVC is not supported by this macro, if you want to use it in windows, use MinGW or  [Clang in visual studio](https://learn.microsoft.com/en-us/cpp/build/clang-support-msbuild?view=msvc-170)
+
+
 ## Functions
 
 ### `match(v, lambdas...)`
@@ -110,24 +114,6 @@ Any callable which implements the operator() for the types is valid, so you can 
       [](Err2 err) { return "Error2"; }
   );
   // result is "Integer: 42"
-  ```
-
-### `zip_match(f, rs...)`
-Combines multiple `Result`s. If all `Result`s are successes, it applies the function `f` to the success values and returns a `Result` with the result of `f`. If any `Result` is an error, it returns the first error encountered. The error type is deduced as a common type if all errors are the same, or a `std::variant` of the error types otherwise.
-
-- **Parameters:**
-  - `f`: A function to apply to the success values.
-  - `rs...`: Variadic list of `Result` objects.
-- **Return:** A `Result` with either the result of `f` or the first error.
-- **Example:**
-  ```cpp
-  auto value1 = maybe_get_int(); // returns Result<value1, E>
-  auto value2 = maybe_get_double(); // returns Result<value1, E2>
-
-  auto combined = cppmatch::zip_match([](int i, double d) { return i + d; }, r1, r2);
-  // combined is a Result<double, Error<E,E2>>
-  // if value1 and value2 where valid, the function is executed and combined has a correct value
-  // if it was invalid, combined is a Result with the first error value encountered 
   ```
 
 ### `default_expect(result, default_value)`
@@ -170,3 +156,48 @@ A range adaptor that takes a range of `Result<T, E>` and returns a view containi
   // success_values is a view containing 1 and 2
   ```
 
+---
+
+## Exception-Based Error Handling
+
+When exceptions are enabled (i.e. `_CPPUNWIND`, `__EXCEPTIONS`, or `__cpp_exceptions` are defined), cppmatch also provides exception-based alternatives to handle error propagation and pattern matching.
+
+### `expect_e(expr)`
+The function `expect_e` is an alternative to the `expect` macro. It evaluates an expression that returns a `Result<T, E>`. If the result is an error, it uses pattern matching to throw the contained error as an exception. Otherwise, it returns the success value.
+
+- **Example:**
+  ```cpp
+  cppmatch::Result<int, std::string> parse_int(std::string_view input) {
+      // Returns either a valid int or an error string.
+  }
+
+  try {
+      int value = cppmatch::expect_e(parse_int("123"));
+      // Proceed with the valid value.
+  } catch (const std::string &err) {
+      // Handle the error.
+      std::cerr << "Parsing failed: " << err << '\n';
+  }
+  ```
+
+### `match_e(EXPR, ...)`
+The `match_e` macro allows you to perform pattern matching on the result of a function call that returns a `Result`. Unlike `match`, it supports exceptions: if the function call throws an exception (via `expect_e` or otherwise), `match_e` catches it and applies the provided lambdas to handle the exception.
+
+- **Usage Details:**
+  - **EXPR:** Must be a function call expression (not an lvalue), as enforced by a static assertion.
+  - **Lambdas:** A set of lambdas to match the success or error cases.
+  - **Note:** This macro is only available when exceptions are enabled.
+  
+- **Example:**
+  ```cpp
+  auto result_message = cppmatch::match_e(parse_int("abc"),
+      [](int value) { return "Parsed value: " + std::to_string(value); },
+      [](const std::string &err) { return "Error: " + err; }
+  );
+  // If parse_int("abc") returns an error, the error lambda is executed.
+  // Otherwise, the success lambda is executed.
+  ```
+
+Under the hood, `match_e` wraps the function call in a lambda, executes it, and if an exception is thrown, it attempts to match the exception against the provided lambdas by iterating through the possible error types. If no match is found, it rethrows the exception.
+
+---
