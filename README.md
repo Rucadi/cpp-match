@@ -180,10 +180,7 @@ The try...catch will be generated dynamically with the macro **match_e**, surrou
 ### `match_e(EXPR, Lambdas...)`
 The `match_e` macro allows you to perform pattern matching on the result of a function call that returns a `Result`. Unlike `match`, it supports exceptions: if the function call throws an exception (via `expect_e` or otherwise), `match_e` catches it and applies the provided lambdas to handle the exception.
 
-match_e will **AUTOMATICALLY** surround the expression EXPR in a try...catch block that handles all the Error types returned by EXPR.
 
-If an error is thrown that was not specified in match_e, it will be rethrown.
-If only using cpp-match, this is minimized because in match_e you have to exhaustively pass a callable to all possible variant returns of parse_int. 
 
 - **Usage Details:**
   - **EXPR:** Must be a function call expression (not an lvalue), as enforced by a static assertion.
