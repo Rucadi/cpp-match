@@ -160,28 +160,30 @@ A range adaptor that takes a range of `Result<T, E>` and returns a view containi
 
 ## Exception-Based Error Handling
 
-When exceptions are enabled (i.e. `_CPPUNWIND`, `__EXCEPTIONS`, or `__cpp_exceptions` are defined), cppmatch also provides exception-based alternatives to handle error propagation and pattern matching.
+When exceptions are enabled cppmatch also provides exception-based alternatives to handle error propagation and pattern matching, which supports MSVC
 
-### `expect_e(expr)`
-The function `expect_e` is an alternative to the `expect` macro. It evaluates an expression that returns a `Result<T, E>`. If the result is an error, it uses pattern matching to throw the contained error as an exception. Otherwise, it returns the success value.
+### `expect_e(expr)` 
+The **function** `expect_e` is an alternative to the **macro** `expect`. It evaluates an expression that returns a `Result<T, E>`. If the result is an error, it uses pattern matching to throw the contained error as an exception. Otherwise, it returns the success value.
+
+The try...catch will be generated dynamically with the macro **match_e**, surrounding the expression between try/catch is not necessary 
 
 - **Example:**
   ```cpp
-  cppmatch::Result<int, std::string> parse_int(std::string_view input) {
+  cppmatch::Result<int, Error<std::string>> parse_int(std::string_view input) {
       // Returns either a valid int or an error string.
   }
+  
+  int value = expect_e(parse_int("123"));
 
-  try {
-      int value = cppmatch::expect_e(parse_int("123"));
-      // Proceed with the valid value.
-  } catch (const std::string &err) {
-      // Handle the error.
-      std::cerr << "Parsing failed: " << err << '\n';
-  }
   ```
 
-### `match_e(EXPR, ...)`
+### `match_e(EXPR, Lambdas...)`
 The `match_e` macro allows you to perform pattern matching on the result of a function call that returns a `Result`. Unlike `match`, it supports exceptions: if the function call throws an exception (via `expect_e` or otherwise), `match_e` catches it and applies the provided lambdas to handle the exception.
+
+match_e will **AUTOMATICALLY** surround the expression EXPR in a try...catch block that handles all the Error types returned by EXPR.
+
+If an error is thrown that was not specified in match_e, it will be rethrown.
+If only using cpp-match, this is minimized because in match_e you have to exhaustively pass a callable to all possible variant returns of parse_int. 
 
 - **Usage Details:**
   - **EXPR:** Must be a function call expression (not an lvalue), as enforced by a static assertion.
@@ -190,12 +192,11 @@ The `match_e` macro allows you to perform pattern matching on the result of a fu
   
 - **Example:**
   ```cpp
-  auto result_message = cppmatch::match_e(parse_int("abc"),
+  std::string result_message = match_e(parse_int("abc"),
       [](int value) { return "Parsed value: " + std::to_string(value); },
-      [](const std::string &err) { return "Error: " + err; }
+      [](auto&&) { return "An error has occured." }
   );
-  // If parse_int("abc") returns an error, the error lambda is executed.
-  // Otherwise, the success lambda is executed.
+
   ```
 
 Under the hood, `match_e` wraps the function call in a lambda, executes it, and if an exception is thrown, it attempts to match the exception against the provided lambdas by iterating through the possible error types. If no match is found, it rethrows the exception.
