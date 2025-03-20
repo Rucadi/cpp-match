@@ -112,24 +112,6 @@ Any callable which implements the operator() for the types is valid, so you can 
   // result is "Integer: 42"
   ```
 
-### `zip_match(f, rs...)`
-Combines multiple `Result`s. If all `Result`s are successes, it applies the function `f` to the success values and returns a `Result` with the result of `f`. If any `Result` is an error, it returns the first error encountered. The error type is deduced as a common type if all errors are the same, or a `std::variant` of the error types otherwise.
-
-- **Parameters:**
-  - `f`: A function to apply to the success values.
-  - `rs...`: Variadic list of `Result` objects.
-- **Return:** A `Result` with either the result of `f` or the first error.
-- **Example:**
-  ```cpp
-  auto value1 = maybe_get_int(); // returns Result<value1, E>
-  auto value2 = maybe_get_double(); // returns Result<value1, E2>
-
-  auto combined = cppmatch::zip_match([](int i, double d) { return i + d; }, r1, r2);
-  // combined is a Result<double, Error<E,E2>>
-  // if value1 and value2 where valid, the function is executed and combined has a correct value
-  // if it was invalid, combined is a Result with the first error value encountered 
-  ```
-
 ### `default_expect(result, default_value)`
 Returns the success value of a `Result<T, E>` if it is a success, otherwise returns the provided `default_value` of type `T`.
 

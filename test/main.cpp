@@ -149,57 +149,6 @@ void run_tests() {
         CHECK(result2 == result);
       }, passed, failed);
 
-    run_test("zip_match() with two successes", [](){
-        Result<int, std::string> a = 3;
-        Result<int, std::string> b = 7;
-        auto result = zip_match([](int x, int y) { return x + y; }, a, b);
-        CHECK(result.index() == 0);
-        CHECK(std::get<0>(result) == 10);
-    }, passed, failed);
-
-    run_test("zip_match() with one error", [](){
-        Result<int, std::string> a = 3;
-        Result<int, std::string> b = std::string("error in b");
-        auto result = zip_match([](int x, int y) { return x + y; }, a, b);
-        CHECK(result.index() == 1);
-        CHECK(std::get<1>(result) == "error in b");
-    }, passed, failed);
-
-    run_test("zip_match() with both errors", [](){
-        Result<int, std::string> a = std::string("first error");
-        Result<int, std::string> b = std::string("second error");
-        auto result = zip_match([](int x, int y) { return x + y; }, a, b);
-        CHECK(result.index() == 1);
-        CHECK(std::get<1>(result) == "first error");
-    }, passed, failed);
-
-    run_test("zip_match() with three successes", [](){
-        Result<int, std::string> a = 2;
-        Result<int, std::string> b = 3;
-        Result<int, std::string> c = 4;
-        auto result = zip_match([](int x, int y, int z) { return x * y * z; }, a, b, c);
-        CHECK(result.index() == 0);
-        CHECK(std::get<0>(result) == 24);
-    }, passed, failed);
-
-    run_test("zip_match() with three arguments (one error)", [](){
-        Result<int, std::string> a = 2;
-        Result<int, std::string> b = std::string("error in b");
-        Result<int, std::string> c = 4;
-        auto result = zip_match([](int x, int y, int z) { return x * y * z; }, a, b, c);
-        CHECK(result.index() == 1);
-        CHECK(std::get<1>(result) == "error in b");
-    }, passed, failed);
-
-    run_test("zip_match() void zip_match returns std::monostate as Ok value", [](){
-        Result<int, std::string> a = 2;
-        Result<int, std::string> b = 1;
-        Result<int, std::string> c = 4;
-        auto t = zip_match([](int x, int y, int z) -> void { }, a, b, c);
-        CHECK(t.index() == 0);
-        static_assert(std::is_same_v<std::variant_alternative_t<0, decltype(t)>, std::monostate>, "Expected monostate");
-    }, passed, failed);
-
     run_test("map_error with success", [](){
         Result<int, std::string> r = 42;
         auto r2 = map_error(r, [](const std::string& s) { return s.size(); });

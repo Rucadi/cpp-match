@@ -32,3 +32,4 @@ IndentPPDirectives: AfterHash
 PPIndentWidth: 2
 BinPackArguments: false
 BreakBeforeTernaryOperators: true
+NamespaceIndentationKind: NI_All 

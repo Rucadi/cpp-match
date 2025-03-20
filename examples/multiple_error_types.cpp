@@ -32,7 +32,7 @@ struct Coordinates {
 
         auto xPart = v.substr(0, commaPos);
         auto yPart = v.substr(commaPos + 1);
-        // Use the generalized zip_match to match two variants.
+
         return Coordinates{expect(parseInt(xPart)), expect(parseInt(yPart))};
     }
 
