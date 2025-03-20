@@ -115,9 +115,15 @@ constexpr auto flat_visit(T &&value, Visitor &&vis) {
 
 template <typename T, typename E>
 constexpr bool is_err(const Result<T, E> &result) noexcept {
+  #if defined(__cpp_if_consteval)
+  if consteval  {
+    return std::holds_alternative<E>(result);
+  }
+  #else 
   if constexpr (std::is_constant_evaluated()) {
     return std::holds_alternative<E>(result);
   }
+  #endif
   return result.index(); // at runtime is faster to check the index
 }
 
