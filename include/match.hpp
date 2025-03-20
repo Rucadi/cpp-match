@@ -28,6 +28,7 @@ SOFTWARE.
 #include <tuple>
 #include <type_traits>
 #include <ranges>
+
 namespace cppmatch {
 
     // Exposed Type: Result
@@ -43,7 +44,8 @@ namespace cppmatch {
     template<typename... Ts>
     class Error {
     public:
-        std::variant<Ts...> value;
+        using VariantType = std::variant<Ts...>;
+        VariantType value;
 
         template<typename T, typename = std::enable_if_t<is_one_of<std::decay_t<T>, Ts...>::value>>
         Error(T&& t) : value(std::forward<T>(t)) {}
@@ -104,7 +106,21 @@ namespace cppmatch {
         }
     
     } // namespace cppmatch_detail
-    // Applies pattern matching on a variant (or our Error type) using provided lambdas.
+
+    
+    template<typename T, typename E>
+    constexpr bool is_err(const Result<T, E>& result) noexcept {
+       if constexpr (std::is_constant_evaluated()) {
+            return std::holds_alternative<E>(result);
+        }
+        return result.index(); // at runtime is faster to check the index
+    }
+
+    template<typename T, typename E>
+    constexpr bool is_ok(const Result<T, E>& result) noexcept {
+        return !is_err(result);
+    }
+    
     template<typename Variant, typename... Lambdas>
     constexpr auto match(Variant&& v, Lambdas&&... lambdas) {
         return cppmatch_detail::flat_visit(
@@ -113,7 +129,20 @@ namespace cppmatch {
         );
     }
   
-  
+    #if (defined(__GNUC__) || (defined(__clang__)))
+        #define expect(expr) __extension__ ({                                         \
+            auto&& expr_ = (expr);                                                     \
+            if (cppmatch::is_err(expr_))                                                \
+                return std::get<1>(std::move(expr_)); /* Handle error case */            \
+            std::get<0>(std::move(expr_));                                                \
+        })
+    #elif defined(_MSC_VER)
+        // MSVC workaround: Force a compile-time error *only when used*
+        #define expect(expr) static_assert([]{ return false; }(), "MSVC does not support 'statement expressions ({}), you can still use the expect_e / match_e which use exceptions.")
+    #else
+        #define expect(expr) static_assert([]{ return false; }(), "Unknown compiler: does not support 'statement expressions ({}), you can still use the expect_e / match_e which use exceptions.")
+    #endif
+
 
     // Exposed Function: default_expect
     // Returns the success value of a Result or a provided default if an error occurred.
@@ -128,24 +157,11 @@ namespace cppmatch {
     constexpr auto map_error(const Result<T, E1>& result, F&& f) {
         using E2 = std::invoke_result_t<F, const E1&>;
         return match(result,
-            [](const T& val) static { return Result<T, E2>(std::in_place_index_t<0>{}, val); },
+            [](const T& val) { return Result<T, E2>(std::in_place_index_t<0>{}, val); },
             [&](const E1& err) { return Result<T, E2>(std::in_place_index_t<1>{}, f(err)); }
         );
     }
 
-    template<typename T, typename E>
-    constexpr bool is_err(const Result<T, E>& result) noexcept {
-        if consteval {
-            return std::holds_alternative<E>(result);
-        }
-        return result.index(); // at runtime is faster to check the index
-    }
-
-    template<typename T, typename E>
-    constexpr bool is_ok(const Result<T, E>& result) noexcept {
-        return !is_err(result);
-    }
-    
     namespace cppmatch_ranges{
         struct successes_fn {
             template <std::ranges::range R>
@@ -154,8 +170,8 @@ namespace cppmatch {
                 static_assert(std::variant_size_v<VariantType> == 2, "Variants must have exactly two alternatives");
     
                 return std::forward<R>(range)
-                    | std::views::filter([](const auto& res) static { return is_ok(res); })
-                    | std::views::transform([](const auto& res) static { return std::get<0>(res); });
+                    | std::views::filter([](const auto& res)  { return is_ok(res); })
+                    | std::views::transform([](const auto& res)  { return std::get<0>(res); });
             }
     
             template <std::ranges::range R>
@@ -169,14 +185,81 @@ namespace cppmatch {
     inline constexpr cppmatch_ranges::successes_fn successes{};
 } // namespace cppmatch
 
-#define expect(expr) __extension__ ({                                         \
-    auto&& expr_ = (expr);                                                     \
-    if (cppmatch::is_err(expr_))                                                \
-        return std::get<1>(std::move(expr_)); /* Handle error case */            \
-    std::get<0>(std::move(expr_));                                                \
-})
 
 
+#if  defined(_CPPUNWIND) || defined(__EXCEPTIONS) || defined(__cpp_exceptions)
+namespace cppmatch 
+{
+    template<typename T>
+    struct FlattenErrorVariant {
+        using type = T;
+    };
+
+    // Specialization for std::variant
+    template<typename T, typename... Ts> struct FlattenErrorVariant<std::variant<T, Ts...>> {
+        private:
+            // If any type is `Error<Us...>`, extract the types inside it
+            template<typename... Us>
+            static auto helper(std::variant<T, Ts...>*, Error<Us...>*)  -> std::variant<T, Ts..., Us...>;
+
+            // Fallback for when `Error<TYPES...>` is not in the variant
+            static auto helper(std::variant<T, Ts...>*, ...)  -> std::variant<T, Ts...>;
+
+    public:
+        using type = decltype(helper(static_cast<std::variant<T, Ts...>*>(nullptr),
+                                        static_cast<Ts*>(nullptr)...));
+    };
+    
+    template<typename T>
+    using FlattenErrorVariant_t = typename FlattenErrorVariant<T>::type;
+
+        template <typename Variant>
+        constexpr auto expect_e(Variant &&v) {
+            if (cppmatch::is_err(v)) {
+                match(std::get<1>(v), [](auto &&err) -> void { throw err; });
+            }
+            return std::get<0>(v);
+        }
+        
+        template <typename ErrorType, size_t I, typename... Lambdas>
+        constexpr auto handle_exception_index(std::exception_ptr eptr, Lambdas&&... lambdas) {
+            using CurrentType = std::variant_alternative_t<I, std::decay_t<ErrorType>>;       
+            try {
+                std::rethrow_exception(eptr);
+            } catch (const CurrentType& err) {
+                return cppmatch_detail::flat_visit(err, cppmatch_detail::overloaded{std::forward<Lambdas>(lambdas)...});
+            } catch (...) {
+            }
+        
+            if constexpr (I + 1 < std::variant_size_v<std::decay_t<ErrorType>>) {
+                return handle_exception_index<ErrorType, I + 1>(eptr, std::forward<Lambdas>(lambdas)...);
+            } else {
+                throw;  // Rethrow if nothing matches
+            }
+        }
+        
+        
+        template <typename Expr, typename... Lambdas>
+        constexpr auto dynamic_match(Expr&& expr, Lambdas&&... lambdas) {
+            using ResultType = std::invoke_result_t<Expr>;
+            using SuccessType = std::variant_alternative_t<0, ResultType>;
+            using ErrorType = std::variant_alternative_t<1, ResultType>;
+
+            try {
+                return match(std::forward<Expr>(expr)(), std::forward<Lambdas>(lambdas)...);
+            } catch (...) {
+                std::exception_ptr eptr = std::current_exception();
+                    return handle_exception_index<FlattenErrorVariant_t<ResultType>, 0>(eptr, std::forward<Lambdas>(lambdas)...);
+            }
+        }
+
+        #define match_e(EXPR, ...) \
+        ([&]{ \
+            static_assert(!std::is_lvalue_reference_v<decltype((EXPR))>, "EXPR must be a function call, not an lvalue!"); \
+            return dynamic_match([&]{ return (EXPR); }, cppmatch_detail::overloaded{__VA_ARGS__}); \
+        }())
+    }
+#endif
 
 // This functionality is not yet decided to be included in the library, keep it "separated" for now to allow deletion if needed.
 namespace cppmatch {
@@ -255,4 +338,4 @@ namespace cppmatch {
         return cppmatch_detail::zip_match_impl < SuccessTuple, Return > (std::forward < F > (f), std::index_sequence_for < Rs... > {}, rs...);
       }
   
-  }
+  } // namespace cppmatch

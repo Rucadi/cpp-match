@@ -67,7 +67,7 @@
             src = ./.;
             buildInputs = [ pkgs.gcc14 ];
             configurePhase = "";
-            buildPhase = "g++ -std=c++23 test/main.cpp -Iinclude -o cppmatch_tests";
+            buildPhase = "g++ -std=c++23 test/main.cpp -g -O3 -Iinclude -o cppmatch_tests";
             installPhase = ''
               mkdir -p $out/bin
               cp cppmatch_tests $out/bin/
@@ -81,7 +81,7 @@
             buildInputs = [  google-benchmark];
             configurePhase = "";
             buildPhase = ''
-              clang++ -std=c++23 -O3 benchmark/main.cpp -Iinclude -I${google-benchmark}/include -L${google-benchmark}/lib -lbenchmark -pthread -o cppmatch_benchmark
+              clang++ -std=c++23  -g -O3 benchmark/main.cpp -Iinclude -I${google-benchmark}/include -L${google-benchmark}/lib -lbenchmark -pthread -o cppmatch_benchmark
             '';
             installPhase = ''
               mkdir -p $out/bin

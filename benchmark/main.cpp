@@ -39,6 +39,13 @@ Result<unsigned, invalid_value> do_fib_cppmatch(unsigned n, unsigned max_depth) 
    return expect(do_fib_cppmatch(n - 2, max_depth - 1)) + expect(do_fib_cppmatch(n - 1, max_depth - 1));
 }
 
+Result<unsigned, invalid_value> do_fib_cppmatch_with_exceptions(unsigned n, unsigned max_depth) {
+    if (!max_depth) return invalid_value{std::to_string(n) + " exceeds max_depth"};
+    if (n <= 2) return 1U;
+    return expect_e(do_fib_cppmatch_with_exceptions(n - 2, max_depth - 1)) + expect_e(do_fib_cppmatch_with_exceptions(n - 1, max_depth - 1));
+ }
+
+ 
 static void recursive_fib_std_expected(benchmark::State& state) {
   for (auto _ : state) {
     auto res = do_fib_expected(15, 20);
@@ -55,6 +62,15 @@ static void recursive_fib_cppmatch(benchmark::State& state) {
 }
 BENCHMARK(recursive_fib_cppmatch);
 
+static void recursive_fib_cppmatch_with_exceptions(benchmark::State& state) {
+    for (auto _ : state) {
+      auto res = match_e(do_fib_cppmatch_with_exceptions(15, 20), [](auto&&){return "";});
+      benchmark::DoNotOptimize(res);
+    }
+  }
+  BENCHMARK(recursive_fib_cppmatch_with_exceptions);
+
+  
 
 static void recursive_fib_throws(benchmark::State& state) {
   for (auto _ : state) {
@@ -159,7 +175,7 @@ parse_coordinate_expected(const std::string& input) {
 
 
 
-Result<double, InvalidDoubleConversion> safe_str_to_double_cppmatch(std::string_view str) {
+Result<double, Error<InvalidCoordinate, InvalidDoubleConversion >> safe_str_to_double_cppmatch(std::string_view str) {
     double value = 0.0;
     auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), value);
     if (ec == std::errc::invalid_argument)
@@ -171,8 +187,6 @@ Result<double, InvalidDoubleConversion> safe_str_to_double_cppmatch(std::string_
     return value;
 }
 
-
-
 Result<Coordinate, Error<InvalidDoubleConversion, InvalidCoordinate, InvalidCoordinateFormat>>
 parse_coordinate_cppmatch(const std::string& input) {
     std::istringstream ss(input);
@@ -183,6 +197,26 @@ parse_coordinate_cppmatch(const std::string& input) {
     
     double latitude  = expect(safe_str_to_double_cppmatch(lat_str));
     double longitude = expect(safe_str_to_double_cppmatch(lon_str));
+    
+    if (latitude < -90 || latitude > 90)
+        return InvalidCoordinate{"Latitude out of range (-90 to 90)"};
+    if (longitude < -180 || longitude > 180)
+        return InvalidCoordinate{"Longitude out of range (-180 to 180)"};
+    
+    return Coordinate{latitude, longitude};
+}
+
+
+Result<Coordinate, Error<InvalidDoubleConversion, InvalidCoordinate, InvalidCoordinateFormat>>
+parse_coordinate_cppmatch_with_exceptions(const std::string& input) {
+    std::istringstream ss(input);
+    std::string lat_str, lon_str;
+    
+    if (!std::getline(ss, lat_str, ',') || !std::getline(ss, lon_str))
+        return InvalidCoordinateFormat{"Invalid format (expected 'latitude,longitude')"};
+    
+    double latitude  = expect_e(safe_str_to_double_cppmatch(lat_str));
+    double longitude = expect_e(safe_str_to_double_cppmatch(lon_str));
     
     if (latitude < -90 || latitude > 90)
         return InvalidCoordinate{"Latitude out of range (-90 to 90)"};
@@ -251,6 +285,17 @@ static void coord_cppmatch(benchmark::State& state) {
     }
 }
 BENCHMARK(coord_cppmatch);
+
+static void coord_cppmatch_with_exceptions(benchmark::State& state) {
+    for (auto _ : state) {
+        std::string input = generate_random_coordinate_string();
+        auto result = match_e(
+            parse_coordinate_cppmatch_with_exceptions(input), [](auto){return "";});
+        benchmark::DoNotOptimize(result);
+    }
+}
+BENCHMARK(coord_cppmatch_with_exceptions);
+
 
 
 
